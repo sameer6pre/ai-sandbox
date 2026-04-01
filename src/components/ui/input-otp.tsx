@@ -26,6 +26,28 @@ const InputOTPSlot = React.forwardRef<
   React.ComponentPropsWithoutRef<"div"> & { index: number }
 >(({ index, className, ...props }, ref) => {
   const inputOTPContext = React.useContext(OTPInputContext);
+
+  // Validate context existence and index boundaries to avoid runtime errors
+  if (
+    !inputOTPContext ||
+    !Array.isArray(inputOTPContext.slots) ||
+    typeof index !== "number" ||
+    index < 0 ||
+    index >= inputOTPContext.slots.length
+  ) {
+    // PRECOGS_FIX: Validate context and index bounds to prevent runtime exception/DoS
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "relative flex h-10 w-10 items-center justify-center border-y border-r border-input text-sm transition-all first:rounded-l-md first:border-l last:rounded-r-md",
+          className,
+        )}
+        {...props}
+      />
+    );
+  }
+
   const { char, hasFakeCaret, isActive } = inputOTPContext.slots[index];
 
   return (
@@ -47,15 +69,3 @@ const InputOTPSlot = React.forwardRef<
     </div>
   );
 });
-InputOTPSlot.displayName = "InputOTPSlot";
-
-const InputOTPSeparator = React.forwardRef<React.ElementRef<"div">, React.ComponentPropsWithoutRef<"div">>(
-  ({ ...props }, ref) => (
-    <div ref={ref} role="separator" {...props}>
-      <Dot />
-    </div>
-  ),
-);
-InputOTPSeparator.displayName = "InputOTPSeparator";
-
-export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator };
