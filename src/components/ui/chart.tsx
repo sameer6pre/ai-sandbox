@@ -61,25 +61,64 @@ ChartContainer.displayName = "Chart";
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(([_, config]) => config.theme || config.color);
 
-  if (!colorConfig.length) {
+const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
+  // Collect entries in a robust typed form
+  const entries = Object.entries(config) as Array<[string, any]>;
+
+  // Helper: escape attribute content used inside the selector's quoted attribute value
+  function escapeAttrValue(str: string) {
+    return String(str).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n|\r/g, "");
+  }
+
+  // Helper: validate that a color value is a safe CSS color literal
+  function isValidColor(value: unknown): value is string {
+    if (typeof value !== "string") return false;
+    const v = value.trim();
+    // Allow hex colors (#rgb, #rrggbb, #rrggbbaa)
+    const hex = /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+    // Allow rgb(a) and hsl(a) forms
+    const rgb = /^rgba?\(\s*(?:\d{1,3}%?\s*,\s*){2}\d{1,3}%?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i;
+    const hsl = /^hsla?\(\s*\d+(?:\.\d+)?(?:deg|rad|turn)?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i;
+    // Allow CSS variables and keywords like 'transparent'
+    const cssVarOrKeyword = /^var\(--[a-zA-Z0-9_-]+\)$|^[a-zA-Z-]+$/;
+
+    return hex.test(v) || rgb.test(v) || hsl.test(v) || cssVarOrKeyword.test(v) || v === "transparent";
+  }
+
+  const blocks: string[] = [];
+
+  for (const [theme, prefix] of Object.entries(THEMES)) {
+    const varLines: string[] = [];
+
+    for (const [key, itemConfig] of entries) {
+      const color = itemConfig?.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig?.color;
+
+      // PRECOGS_FIX: validate color values against strict safe patterns to prevent CSS/HTML injection
+      if (!isValidColor(color)) continue;
+
+      // sanitize variable name to a safe token
+      const safeKey = String(key).replace(/[^a-zA-Z0-9_-]/g, "-");
+
+      varLines.push(`  --color-${safeKey}: ${color};`);
+    }
+
+    if (varLines.length) {
+      // PRECOGS_FIX: escape id when used inside the attribute selector
+      const escapedId = escapeAttrValue(id);
+      blocks.push(`${prefix} [data-chart="${escapedId}"] {\n${varLines.join("\n")}\n}`);
+    }
+  }
+
+  if (!blocks.length) {
     return null;
   }
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
-${colorConfig
-  .map(([key, itemConfig]) => {
-    const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
-  })
-  .join("\n")}
-}
-`,
+  const css = blocks.join("\n");
+
+  // Use a text child (React escapes content) rather than directly inserting unsafe HTML.
+  // The css string is constructed from validated/escaped parts above.
+  return <style>{css}</style>;
+};
           )
           .join("\n"),
       }}
