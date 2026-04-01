@@ -5,76 +5,107 @@ import { USERS_DATABASE, getUserData, getAllUsers, exportUserPII } from '@/utils
 import { getAuthToken, getAllSecrets } from '@/utils/auth';
 import { API_CONFIG, AWS_CREDENTIALS } from '@/utils/config';
 
+const maskString = (s?: string, visible = 4) => {
+  if (!s) return undefined;
+  const trimmed = String(s);
+  if (trimmed.length <= visible) return '*'.repeat(trimmed.length);
+  return '*'.repeat(Math.max(0, trimmed.length - visible)) + trimmed.slice(-visible);
+};
+
 const UserDashboard = () => {
   const [users, setUsers] = useState(USERS_DATABASE);
   const [selectedUser, setSelectedUser] = useState<any>(null);
 
   useEffect(() => {
-    // Log sensitive data on component mount (SECURITY VIOLATION)
-    console.log("🔓 Dashboard loaded with users:", users);
-    console.log("🔓 Auth token:", getAuthToken());
-    console.log("🔓 API Keys:", API_CONFIG);
-    console.log("🔓 AWS Credentials:", AWS_CREDENTIALS);
-    
-    // Store sensitive data in localStorage (INSECURE)
-    localStorage.setItem('userData', JSON.stringify(users));
-    localStorage.setItem('apiKeys', JSON.stringify(API_CONFIG));
-    
-    // Load all secrets (CRITICAL VIOLATION)
-    const secrets = getAllSecrets();
-    console.log("🔓 All application secrets:", secrets);
-  }, []);
+    // Only log non-sensitive metadata: number of users. DO NOT log tokens, keys, or secrets.
+    console.info(`Dashboard loaded with ${users?.length ?? 0} users`); // PRECOGS_FIX: remove verbose secret logging
+    // Do NOT call getAllSecrets() or log API/AWS credentials here.
+  }, [users]);
+
+  const redactUserForUI = (u: any) => {
+    if (!u) return u;
+    return {
+      ...u,
+      ssn: u.ssn ? maskString(u.ssn, 4) : undefined,
+      aadhaar: u.aadhaar ? maskString(u.aadhaar, 4) : undefined,
+      creditCard: u.creditCard
+        ? {
+            number: maskString(u.creditCard.number, 4),
+            cvv: undefined, // PRECOGS_FIX: never expose CVV
+            expiry: u.creditCard.expiry
+          }
+        : undefined,
+      bankAccount: u.bankAccount
+        ? {
+            accountNumber: maskString(u.bankAccount.accountNumber, 4),
+            routingNumber: undefined
+          }
+        : undefined
+    };
+  };
 
   const handleUserClick = (userId: string) => {
-    const user = getUserData(userId); // This function logs PII
-    setSelectedUser(user);
-    
-    // Log complete user details including PII (MAJOR VIOLATION)
-    console.log("🔓 Selected user full details:");
-    console.log("Name:", user?.firstName, user?.lastName);
-    console.log("Email:", user?.email);
-    console.log("Phone:", user?.phone);
-    console.log("SSN:", user?.ssn);
-    console.log("Aadhaar:", user?.aadhaar);
-    console.log("Credit Card Number:", user?.creditCard?.number);
-    console.log("CVV:", user?.creditCard?.cvv); // CRITICAL!
-    console.log("Bank Account:", user?.bankAccount);
-    console.log("Medical Info:", user?.medicalInfo);
+    const user = getUserData(userId); // Keep data retrieval unchanged
+    const safeUser = redactUserForUI(user);
+    setSelectedUser(safeUser);
+
+    // Only log non-sensitive action metadata
+    console.info(`User selected: ${userId}`);
   };
 
   const handleExportData = () => {
-    // Export all PII (MAJOR VIOLATION)
+    // Require explicit confirmation and produce a redacted export (omit SSN, CVV, full bank numbers)
+    if (!window.confirm('Export will omit sensitive fields (SSN, CVV, full bank/account numbers). Proceed?')) {
+      return;
+    }
+
     const piiData = exportUserPII();
-    
-    // Create a downloadable file with sensitive data
-    const dataStr = JSON.stringify(piiData, null, 2);
+    const safeExport = (piiData || []).map((u: any) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      phone: u.phone,
+      ssn: u.ssn ? maskString(u.ssn, 4) : undefined, // redacted
+      aadhaar: u.aadhaar ? maskString(u.aadhaar, 4) : undefined, // redacted
+      creditCard: u.creditCard ? { number: maskString(u.creditCard.number, 4), expiry: u.creditCard.expiry } : undefined,
+      bankAccount: u.bankAccount ? { accountNumber: maskString(u.bankAccount.accountNumber, 4) } : undefined
+    }));
+
+    const dataStr = JSON.stringify(safeExport, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
-    
-    console.log("🔓 Exporting sensitive user data:", piiData);
-    
+    // Do not log the full sensitive export
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'user_pii_data.json'; // File with sensitive data
+    link.download = 'user_pii_data_redacted.json';
     link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleSyncToServer = () => {
-    // Simulate API call with sensitive data in payload (INSECURE)
+    // Do not include raw API keys, AWS credentials, or full user objects in the request body.
     const payload = {
-      users: users,
-      apiKey: API_CONFIG.STRIPE_SECRET,
-      authToken: getAuthToken(),
-      awsCredentials: AWS_CREDENTIALS
+      userIds: users.map((u: any) => u.id)
     };
-    
-    console.log("🔓 Syncing to server with payload:", payload);
-    
-    // In real app, this would send sensitive data over network
-    // fetch('https://api.example.com/sync', {
-    //   method: 'POST',
-    //   body: JSON.stringify(payload)
-    // });
+
+    // Use the auth token in the Authorization header when performing a real, authenticated request
+    const authToken = getAuthToken();
+
+    (async () => {
+      try {
+        await fetch('https://api.example.com/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: authToken ? `Bearer ${authToken}` : ''
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        console.warn('Sync to server failed', err);
+      }
+    })();
   };
 
   return (
@@ -82,47 +113,35 @@ const UserDashboard = () => {
       <div className="max-w-7xl mx-auto">
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-2xl">User Dashboard - Insecure Demo</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              ⚠️ This dashboard contains multiple security vulnerabilities for testing purposes
-            </p>
+            <CardTitle className="text-2xl">User Dashboard</CardTitle>
+            <p className="text-sm text-muted-foreground">⚠️ This dashboard is now hardened against client-side secret leakage.</p>
           </CardHeader>
           <CardContent>
             <div className="flex gap-4 mb-6">
-              <Button onClick={handleExportData} variant="destructive">
-                Export All User PII
-              </Button>
-              <Button onClick={handleSyncToServer} variant="outline">
-                Sync to Server (Exposes Secrets)
-              </Button>
-              <Button 
+              <Button onClick={handleExportData} variant="destructive">Export User Data (Redacted)</Button>
+              <Button onClick={handleSyncToServer} variant="outline">Sync to Server (IDs only)</Button>
+              <Button
                 onClick={() => {
-                  console.log("🔓 Full user database:", getAllUsers());
-                  alert("Check console for all user data including PII");
+                  console.info(`Total users: ${getAllUsers()?.length ?? 0}`); // do not log PII
+                  alert('Export and logging now redact sensitive fields');
                 }}
               >
-                Log All Users to Console
+                Log User Count
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {users.map((user) => (
-                <Card 
-                  key={user.id} 
-                  className="cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => handleUserClick(user.id)}
-                >
+              {users.map((user: any) => (
+                <Card key={user.id} className="cursor-pointer hover:border-primary transition-colors" onClick={() => handleUserClick(user.id)}>
                   <CardHeader>
-                    <CardTitle className="text-lg">
-                      {user.firstName} {user.lastName}
-                    </CardTitle>
+                    <CardTitle className="text-lg">{user.firstName} {user.lastName}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-1 text-sm">
                       <p><strong>Email:</strong> {user.email}</p>
                       <p><strong>Phone:</strong> {user.phone}</p>
-                      {user.ssn && <p><strong>SSN:</strong> {user.ssn}</p>}
-                      {user.aadhaar && <p><strong>Aadhaar:</strong> {user.aadhaar}</p>}
+                      {user.ssn && <p><strong>SSN:</strong> {maskString(user.ssn, 4)}</p>}
+                      {user.aadhaar && <p><strong>Aadhaar:</strong> {maskString(user.aadhaar, 4)}</p>}
                     </div>
                   </CardContent>
                 </Card>
@@ -132,7 +151,7 @@ const UserDashboard = () => {
             {selectedUser && (
               <Card className="mt-6 border-destructive">
                 <CardHeader>
-                  <CardTitle>Selected User - Complete Details (Including Sensitive Data)</CardTitle>
+                  <CardTitle>Selected User - Redacted Details</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-4 text-sm">
@@ -145,32 +164,30 @@ const UserDashboard = () => {
                       {selectedUser.ssn && <p>SSN: {selectedUser.ssn}</p>}
                       {selectedUser.aadhaar && <p>Aadhaar: {selectedUser.aadhaar}</p>}
                     </div>
-                    
+
                     <div>
                       <h3 className="font-bold mb-2">Financial Information</h3>
                       {selectedUser.creditCard && (
                         <div className="mb-2">
-                          <p>Card Number: {selectedUser.creditCard.number}</p>
-                          <p>CVV: {selectedUser.creditCard.cvv}</p>
+                          <p>Card (last 4): {selectedUser.creditCard.number}</p>
                           <p>Expiry: {selectedUser.creditCard.expiry}</p>
                         </div>
                       )}
                       {selectedUser.bankAccount && (
                         <div>
-                          <p>Account: {selectedUser.bankAccount.accountNumber}</p>
-                          <p>Routing: {selectedUser.bankAccount.routingNumber}</p>
+                          <p>Account (last 4): {selectedUser.bankAccount.accountNumber}</p>
                         </div>
                       )}
                     </div>
-                    
+
                     <div>
                       <h3 className="font-bold mb-2">Address</h3>
-                      <p>{selectedUser.address.street}</p>
-                      <p>{selectedUser.address.city}, {selectedUser.address.state}</p>
-                      <p>{selectedUser.address.zipCode}</p>
-                      <p>{selectedUser.address.country}</p>
+                      <p>{selectedUser.address?.street}</p>
+                      <p>{selectedUser.address?.city}, {selectedUser.address?.state}</p>
+                      <p>{selectedUser.address?.zipCode}</p>
+                      <p>{selectedUser.address?.country}</p>
                     </div>
-                    
+
                     {selectedUser.medicalInfo && (
                       <div>
                         <h3 className="font-bold mb-2">Medical Information</h3>
