@@ -40,8 +40,9 @@ const BreadcrumbLink = React.forwardRef<
   }
 >(({ asChild, className, ...props }, ref) => {
   const Comp = asChild ? Slot : "a";
+  const safeProps = { ...props, href: props.href && props.href.startsWith('javascript:') ? undefined : props.href }; // PRECOGS_FIX: prevent javascript: URI XSS
 
-  return <Comp ref={ref} className={cn("transition-colors hover:text-foreground", className)} {...props} />;
+  return <Comp ref={ref} className={cn("transition-colors hover:text-foreground", className)} {...safeProps} />;
 });
 BreadcrumbLink.displayName = "BreadcrumbLink";
 
@@ -59,11 +60,11 @@ const BreadcrumbPage = React.forwardRef<HTMLSpanElement, React.ComponentPropsWit
 );
 BreadcrumbPage.displayName = "BreadcrumbPage";
 
-const BreadcrumbSeparator = ({ children, className, ...props }: React.ComponentProps<"li">) => (
+({ children, className, ...props }: React.ComponentProps<"li">) => (
   <li role="presentation" aria-hidden="true" className={cn("[&>svg]:size-3.5", className)} {...props}>
     {children ?? <ChevronRight />}
   </li>
-);
+)
 BreadcrumbSeparator.displayName = "BreadcrumbSeparator";
 
 const BreadcrumbEllipsis = ({ className, ...props }: React.ComponentProps<"span">) => (
