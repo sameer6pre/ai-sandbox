@@ -26,24 +26,42 @@ const PaginationItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li"
 ));
 PaginationItem.displayName = "PaginationItem";
 
-type PaginationLinkProps = {
-  isActive?: boolean;
-} & Pick<ButtonProps, "size"> &
-  React.ComponentProps<"a">;
+const PaginationLink = ({ className, isActive, size = "icon", ...props }: PaginationLinkProps) => {
+  const { dangerouslySetInnerHTML, href, ...rest } = props as any; // PRECOGS_FIX: strip dangerouslySetInnerHTML and validate/sanitize href
 
-const PaginationLink = ({ className, isActive, size = "icon", ...props }: PaginationLinkProps) => (
-  <a
-    aria-current={isActive ? "page" : undefined}
-    className={cn(
-      buttonVariants({
-        variant: isActive ? "outline" : "ghost",
-        size,
-      }),
-      className,
-    )}
-    {...props}
-  />
-);
+  // Simple href sanitization: disallow dangerous schemes like javascript: and data:text/html
+  let safeHref = href;
+  if (typeof href === "string") {
+    const normalized = href.trim().toLowerCase();
+    if (normalized.startsWith("javascript:") || normalized.startsWith("data:text/html")) {
+      safeHref = undefined; // PRECOGS_FIX: drop unsafe href schemes to prevent script execution via link
+    }
+  }
+
+  return (
+    <a
+      aria-current={isActive ? "page" : undefined}
+      className={cn(
+        buttonVariants({
+          variant: isActive ? "outline" : "ghost",
+          size,
+        }),
+        className,
+      )}
+      href={safeHref}
+      {...rest}
+    />
+  );
+};
+          size,
+        }),
+        className,
+      )}
+      href={safeHref}
+      {...rest}
+    />
+  );
+};
 PaginationLink.displayName = "PaginationLink";
 
 const PaginationPrevious = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => (
