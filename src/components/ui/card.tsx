@@ -2,9 +2,25 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props} />
-));
+const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => {
+  // Remove dangerouslySetInnerHTML from incoming props to prevent XSS injection
+  const { dangerouslySetInnerHTML, ...safeProps } = props as any; // PRECOGS_FIX: strip dangerouslySetInnerHTML to prevent unsafe innerHTML usage
+
+  if (dangerouslySetInnerHTML) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn("Card: dangerouslySetInnerHTML prop was removed for safety");
+    }
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}
+      {...safeProps}
+    />
+  );
+});
 Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(

@@ -55,6 +55,7 @@ const SidebarProvider = React.forwardRef<
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen);
   const open = openProp ?? _open;
+
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value;
@@ -64,9 +65,73 @@ const SidebarProvider = React.forwardRef<
         _setOpen(openState);
       }
 
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+      try {
+        // PRECOGS_FIX: Avoid creating a cookie accessible to the server/over-the-network from client JS; store UI-only state locally instead.
+        // Using localStorage limits the value from being sent with each request as a cookie and reduces CSRF exposure.
+        localStorage.setItem(SIDEBAR_COOKIE_NAME, JSON.stringify({ value: openState, ts: Date.now() }));
+      } catch (e) {
+        // Best-effort: swallow storage errors (e.g., storage disabled) to avoid crashing UI.
+      }
     },
+    [setOpenProp, open, _setOpen],
+  );
+
+  const toggleSidebar = React.useCallback(() => {
+    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
+  }, [isMobile, setOpenMobile, setOpen]);
+
+  // Adds a keyboard shortcut to toggle the sidebar.
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        toggleSidebar();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleSidebar]);
+
+  // We add a state so that we can do data-state="expanded" or "collapsed".
+  // This makes it easier to style the sidebar with Tailwind classes.
+  const state = open ? "expanded" : "collapsed";
+
+  const contextValue = React.useMemo<SidebarContext>(
+    () => ({
+      state,
+      open,
+      setOpen,
+      isMobile,
+      openMobile,
+      setOpenMobile,
+      toggleSidebar,
+    }),
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+  );
+
+  return (
+    <SidebarContext.Provider value={contextValue}>
+      <TooltipProvider delayDuration={0}>
+        <div
+          style={
+            {
+              "--sidebar-width": SIDEBAR_WIDTH,
+              "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+              ...style,
+            } as React.CSSProperties
+          }
+          className={cn("group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar", className)}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </div>
+      </TooltipProvider>
+    </SidebarContext.Provider>
+  );
+});
+SidebarProvider.displayName = "SidebarProvider";
     [setOpenProp, open],
   );
 
@@ -536,49 +601,6 @@ const SidebarMenuSkeleton = React.forwardRef<
     return `${Math.floor(Math.random() * 40) + 50}%`;
   }, []);
 
-  return (
-    <div
-      ref={ref}
-      data-sidebar="menu-skeleton"
-      className={cn("flex h-8 items-center gap-2 rounded-md px-2", className)}
-      {...props}
-    >
-      {showIcon && <Skeleton className="size-4 rounded-md" data-sidebar="menu-skeleton-icon" />}
-      <Skeleton
-        className="h-4 max-w-[--skeleton-width] flex-1"
-        data-sidebar="menu-skeleton-text"
-        style={
-          {
-            "--skeleton-width": width,
-          } as React.CSSProperties
-        }
-      />
-    </div>
-  );
-});
-SidebarMenuSkeleton.displayName = "SidebarMenuSkeleton";
-
-const SidebarMenuSub = React.forwardRef<HTMLUListElement, React.ComponentProps<"ul">>(
-  ({ className, ...props }, ref) => (
-    <ul
-      ref={ref}
-      data-sidebar="menu-sub"
-      className={cn(
-        "mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2.5 py-0.5",
-        "group-data-[collapsible=icon]:hidden",
-        className,
-      )}
-      {...props}
-    />
-  ),
-);
-SidebarMenuSub.displayName = "SidebarMenuSub";
-
-const SidebarMenuSubItem = React.forwardRef<HTMLLIElement, React.ComponentProps<"li">>(({ ...props }, ref) => (
-  <li ref={ref} {...props} />
-));
-SidebarMenuSubItem.displayName = "SidebarMenuSubItem";
-
 const SidebarMenuSubButton = React.forwardRef<
   HTMLAnchorElement,
   React.ComponentProps<"a"> & {
@@ -588,6 +610,35 @@ const SidebarMenuSubButton = React.forwardRef<
   }
 >(({ asChild = false, size = "md", isActive, className, ...props }, ref) => {
   const Comp = asChild ? Slot : "a";
+
+  // Clone props to avoid mutating caller's object
+  const safeProps = { ...props } as React.ComponentProps<"a">;
+
+  // If href is provided and is a string, validate/sanitize it to prevent javascript: and other dangerous schemes.
+  if (typeof safeProps.href === "string") {
+    const raw = safeProps.href.trim();
+
+    // PRECOGS_FIX: Reject javascript: scheme explicitly (case-insensitive) to prevent JS execution via href.
+    if (/^\s*javascript:/i.test(raw)) {
+      safeProps.href = "#"; // PRECOGS_FIX: neutralize dangerous javascript: URIs
+    } else {
+      try {
+        // Use URL to parse the scheme; support relative URLs by providing base when window is available.
+        const base = typeof window !== "undefined" && window.location ? window.location.href : "http://localhost/";
+        const parsed = new URL(raw, base);
+        const protocol = parsed.protocol.toLowerCase();
+
+        // Allow only safe/expected protocols. '' is covered by relative URLs via the base.
+        const allowed = ["http:", "https:", "mailto:", "tel:"]; // PRECOGS_FIX: whitelist allowed protocols
+        if (!allowed.includes(protocol)) {
+          safeProps.href = "#"; // neutralize unknown/unsafe protocols (data:, javascript:, etc.)
+        }
+      } catch (err) {
+        // Malformed URL — neutralize to avoid unexpected behavior
+        safeProps.href = "#";
+      }
+    }
+  }
 
   return (
     <Comp
@@ -603,35 +654,7 @@ const SidebarMenuSubButton = React.forwardRef<
         "group-data-[collapsible=icon]:hidden",
         className,
       )}
-      {...props}
+      {...safeProps}
     />
   );
 });
-SidebarMenuSubButton.displayName = "SidebarMenuSubButton";
-
-export {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupAction,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInput,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuAction,
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSkeleton,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  SidebarProvider,
-  SidebarRail,
-  SidebarSeparator,
-  SidebarTrigger,
-  useSidebar,
-};

@@ -1,82 +1,81 @@
-// Root level configuration file with hardcoded secrets
-// THIS IS EXTREMELY INSECURE - FOR TESTING ONLY
+// Root level configuration - load secrets from environment variables and avoid embedding secrets in source code.
+// THIS FILE MUST NOT CONTAIN HARD-CODED SECRETS. Secrets should be injected by CI/CD or runtime environment.
 
 const config = {
-  // Firebase Config (exposed on client side)
+  // Load client-safe values and secrets from environment variables (server-side or build-time injection).
   firebase: {
-    apiKey: "AIzaSyB2cD3eF4gH5iJ6kL7mN8oP9qR0sT1uV2W",
-    authDomain: "insecure-app-98765.firebaseapp.com",
-    projectId: "insecure-app-98765",
-    storageBucket: "insecure-app-98765.appspot.com",
-    messagingSenderId: "987654321098",
-    appId: "1:987654321098:web:xyz789abc012def345"
+    apiKey: process.env.FIREBASE_API_KEY || null,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || null,
+    projectId: process.env.FIREBASE_PROJECT_ID || null,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || null,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || null,
+    appId: process.env.FIREBASE_APP_ID || null
   },
 
-  // Stripe Keys (NEVER expose secret keys!)
   stripe: {
-    publishableKey: "pk_live_51ABCDEfghijKLMNOpqrstuvWXYZ1234567890",
-    secretKey: "sk_live_51XYZABCdefghiJKLmnopQRSTuvwxyZ0987654321" // CRITICAL: Secret key exposed!
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    secretKey: process.env.STRIPE_SECRET_KEY || null // PRECOGS_FIX: Removed hardcoded Stripe secret; read from environment/runtime secret store
   },
 
-  // Google Services
   google: {
-    mapsApiKey: "AIzaSyD4eF5gH6iJ7kL8mN9oP0qR1sT2uV3wX4Y",
-    analyticsId: "UA-123456789-1",
-    oauthClientId: "123456789012-abcdefghijklmnopqrstuvwxyz012345.apps.googleusercontent.com",
-    oauthClientSecret: "GOCSPX-abcdefghijklmnopqrstuvwxyz" // Should NEVER be in frontend!
+    mapsApiKey: process.env.GOOGLE_MAPS_API_KEY || null,
+    analyticsId: process.env.GOOGLE_ANALYTICS_ID || null,
+    oauthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID || null,
+    oauthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || null
   },
 
-  // AWS Credentials (CRITICAL VULNERABILITY)
   aws: {
-    accessKeyId: "AKIAI44QH8DHBEXAMPLE",
-    secretAccessKey: "je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY",
-    region: "us-west-2",
-    s3Bucket: "my-insecure-bucket-2024"
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || null,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || null,
+    region: process.env.AWS_REGION || null,
+    s3Bucket: process.env.AWS_S3_BUCKET || null
   },
 
-  // Hardcoded Admin Credentials
   adminCredentials: {
-    username: "admin",
-    password: "Admin@123456",
-    email: "admin@insecure-app.com"
+    username: process.env.ADMIN_USERNAME || null,
+    password: process.env.ADMIN_PASSWORD || null,
+    email: process.env.ADMIN_EMAIL || null
   },
 
-  // Database Connection String
   database: {
-    host: "production-db.cxyz123abc.us-east-1.rds.amazonaws.com",
-    port: 5432,
-    username: "db_admin",
-    password: "DbP@ssw0rd2024!",
-    database: "production_users"
+    host: process.env.DB_HOST || null,
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : null,
+    username: process.env.DB_USERNAME || null,
+    password: process.env.DB_PASSWORD || null,
+    database: process.env.DB_DATABASE || null
   },
 
-  // JWT Configuration
   jwt: {
-    secret: "jwt-super-secret-key-2024-do-not-share",
-    algorithm: "HS256",
-    expiresIn: "24h"
+    secret: process.env.JWT_SECRET || null, // PRECOGS_FIX: Removed hardcoded JWT secret; must be provided by environment/secret manager
+    algorithm: process.env.JWT_ALGORITHM || "HS256",
+    expiresIn: process.env.JWT_EXPIRES_IN || "24h"
   },
 
-  // Third Party API Keys
   apiKeys: {
-    sendgrid: "SG.xyz789abc012def345ghi678jkl901mno234pqr567",
+    sendgrid: process.env.SENDGRID_API_KEY || null,
     twilio: {
-      accountSid: "AC1234567890abcdef1234567890abcdef",
-      authToken: "1234567890abcdef1234567890abcdef",
-      phoneNumber: "+15551234567"
+      accountSid: process.env.TWILIO_ACCOUNT_SID || null,
+      authToken: process.env.TWILIO_AUTH_TOKEN || null,
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER || null
     },
-    openai: "sk-proj-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
-    slack: "xoxb-1234567890123-1234567890123-abcdefghijklmnopqrstuvwx",
-    github: "ghp_abcdefghijklmnopqrstuvwxyz1234567890"
+    openai: process.env.OPENAI_API_KEY || null,
+    slack: process.env.SLACK_API_TOKEN || null,
+    github: process.env.GITHUB_TOKEN || null
   }
 };
 
-// Export for use in application
+// Export for server-side use
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = config;
 }
 
-// Also expose globally (additional security risk)
+// Expose only a sanitized, non-sensitive subset to the browser (if needed).
 if (typeof window !== 'undefined') {
-  window.APP_CONFIG = config;
+  const sanitizedConfig = {
+    firebase: { apiKey: config.firebase.apiKey },
+    google: { mapsApiKey: config.google.mapsApiKey },
+    stripe: { publishableKey: config.stripe.publishableKey }
+  };
+  // PRECOGS_FIX: Do not expose secrets to global window; only a minimal, non-sensitive subset is attached.
+  window.APP_CONFIG = sanitizedConfig;
 }
