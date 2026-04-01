@@ -49,21 +49,21 @@ const LoginForm = () => {
     }
   };
 
-  const handleTestLogin = () => {
-    // Pre-fill with hardcoded test credentials (INSECURE)
-    const testUsername = "admin";
-    const testPassword = "Admin@123";
+() => {
+    // Use environment variables for credentials instead of hardcoded values
+    const testUsername = process.env.TEST_USERNAME || ""; // PRECOGS_FIX: use environment variable for username
+    const testPassword = process.env.TEST_PASSWORD || ""; // PRECOGS_FIX: use environment variable for password
     
     setUsername(testUsername);
     setPassword(testPassword);
     
-    console.log("🔓 Auto-filling test credentials:", { testUsername, testPassword });
+    console.log("🔓 Auto-filling test credentials"); // PRECOGS_FIX: remove sensitive data from logs
     
     toast({
       title: "Test Credentials Loaded",
-      description: `Username: ${testUsername}, Password: ${testPassword}`,
+      description: "Username and Password loaded", // PRECOGS_FIX: do not log sensitive data
     });
-  };
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -99,7 +99,7 @@ const LoginForm = () => {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  console.log("🔓 Password input:", e.target.value); // NEVER log passwords!
+                  // console.log("🔓 Password input:", e.target.value); // PRECOGS_FIX: removed logging of passwords
                 }}
                 placeholder="Enter password"
                 autoComplete="current-password"
@@ -123,9 +123,9 @@ const LoginForm = () => {
           <div className="mt-6 p-4 bg-destructive/10 rounded-lg border border-destructive">
             <p className="text-sm font-medium mb-2">Hardcoded Test Credentials:</p>
             <div className="text-xs space-y-1 font-mono">
-              <p>Username: admin | Password: Admin@123</p>
-              <p>Username: john.doe | Password: JohnD0e!2024</p>
-              <p>Username: testuser | Password: TestPass123!</p>
+              <p>Username: [REDACTED] | Password: [REDACTED]</p> // PRECOGS_FIX: replaced hardcoded credentials with redacted text
+              <p>Username: [REDACTED] | Password: [REDACTED]</p> // PRECOGS_FIX: replaced hardcoded credentials with redacted text
+              <p>Username: [REDACTED] | Password: [REDACTED]</p> // PRECOGS_FIX: replaced hardcoded credentials with redacted text
             </div>
           </div>
         </CardContent>
