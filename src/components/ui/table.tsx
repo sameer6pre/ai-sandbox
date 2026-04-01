@@ -12,32 +12,46 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...props} />,
+  ({ className, ...props }, ref) => {
+    const { dangerouslySetInnerHTML, ...safeProps } = props as any; // PRECOGS_FIX: filter out dangerouslySetInnerHTML to avoid passing unsanitized HTML
+    return <thead ref={ref} className={cn("[&_tr]:border-b", className)} {...safeProps} />;
+  },
 );
 TableHeader.displayName = "TableHeader";
 
 const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => (
-    <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />
-  ),
+  ({ className, ...props }, ref) => {
+    const { dangerouslySetInnerHTML, ...safeProps } = props as any; // PRECOGS_FIX: filter out dangerouslySetInnerHTML
+    return (
+      <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...safeProps} />
+    );
+  },
 );
 TableBody.displayName = "TableBody";
 
 const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => (
-    <tfoot ref={ref} className={cn("border-t bg-muted/50 font-medium [&>tr]:last:border-b-0", className)} {...props} />
-  ),
+  ({ className, ...props }, ref) => {
+    const { dangerouslySetInnerHTML, ...safeProps } = props as any; // PRECOGS_FIX: filter out dangerouslySetInnerHTML
+    return (
+      <tfoot ref={ref} className={cn("border-t bg-muted/50 font-medium [&>tr]:last:border-b-0", className)} {...safeProps} />
+    );
+  },
 );
 TableFooter.displayName = "TableFooter";
 
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
-  ({ className, ...props }, ref) => (
-    <tr
-      ref={ref}
-      className={cn("border-b transition-colors data-[state=selected]:bg-muted hover:bg-muted/50", className)}
-      {...props}
-    />
-  ),
+  ({ className, ...props }, ref) => {
+    const { dangerouslySetInnerHTML, ...safeProps } = props as any; // PRECOGS_FIX: filter out dangerouslySetInnerHTML
+    return (
+      <tr
+        ref={ref}
+        className={cn("border-b transition-colors data-[state=selected]:bg-muted hover:bg-muted/50", className)}
+        {...safeProps}
+      />
+    );
+  }
+);
+TableRow.displayName = "TableRow";
 );
 TableRow.displayName = "TableRow";
 
