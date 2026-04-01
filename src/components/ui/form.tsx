@@ -25,21 +25,23 @@ const FormField = <
 }: ControllerProps<TFieldValues, TName>) => {
   return (
     <FormFieldContext.Provider value={{ name: props.name }}>
-      <Controller {...props} />
-    </FormFieldContext.Provider>
-  );
-};
-
-const useFormField = () => {
+function useFormField() {
   const fieldContext = React.useContext(FormFieldContext);
   const itemContext = React.useContext(FormItemContext);
-  const { getFieldState, formState } = useFormContext();
+  // Ensure form methods are available
+  const formContext = useFormContext();
 
-  const fieldState = getFieldState(fieldContext.name, formState);
-
-  if (!fieldContext) {
+  // Validate contexts before accessing their properties to avoid runtime errors
+  if (!fieldContext || typeof (fieldContext as any).name === "undefined" || (fieldContext as any).name === null) {
     throw new Error("useFormField should be used within <FormField>");
   }
+  if (!itemContext || typeof itemContext.id === "undefined" || itemContext.id === null) {
+    throw new Error("useFormField should be used within <FormItem>");
+  }
+
+  const { getFieldState, formState } = formContext;
+  // PRECOGS_FIX: Validate context before use and only then call getFieldState
+  const fieldState = getFieldState(fieldContext.name, formState);
 
   const { id } = itemContext;
 
@@ -51,7 +53,7 @@ const useFormField = () => {
     formMessageId: `${id}-form-item-message`,
     ...fieldState,
   };
-};
+}
 
 type FormItemContextValue = {
   id: string;
